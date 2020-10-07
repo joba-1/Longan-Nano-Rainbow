@@ -14,50 +14,23 @@ const uint32_t MAX_DUTY = 1000;
 
 void init_usart0() {
     usart_init(USART0, 115200);
-    printf("Rainbow V1 10/2020\n\r");
+    printf("Rainbow V2 10/2020\n\r");
 }
 
 
-volatile uint32_t _ch3 = 0;
-volatile uint32_t _no3 = 0;
-
-
 void TIMER1_IRQHandler() {
-    if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_CH0) ) {
-        timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_CH0);
-        if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
-            timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_UP);
-        }
-    }
-    else if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_CH1) ) {
-        timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_CH1);
-        if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
-            timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_UP);
-        }
-    }
-    else if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_CH2) ) {
-        timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_CH2);
-        if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
-            timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_UP);
-        }
-    }
-    else if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_CH3) ) {
-        timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_CH3);
-        if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
-            timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_UP);
-        }
-        else {
-            if( _ch3 <= _no3 ) {
-                gpio_bit_set(GPIOC, GPIO_PIN_13);
-                _ch3++;
-            }
-        }
-    }
-    else if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
+    uint32_t count = timer_counter_read(TIMER1);
+    uint32_t limit = TIMER_CH3CV(TIMER1);
+    if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_UP) ) {
         timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_UP);
-        if( _no3 <= _ch3 ) {
+        if( count < limit ) {
             gpio_bit_reset(GPIOC, GPIO_PIN_13);
-            _no3++;
+        }
+    }
+    if( SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_FLAG_CH3) ) {
+        timer_interrupt_flag_clear(TIMER1, TIMER_INT_FLAG_CH3);
+        if( count >= limit ) {
+            gpio_bit_set(GPIOC, GPIO_PIN_13);
         }
     }
 }
@@ -107,11 +80,16 @@ void init_pwm() {
     init_channel(TIMER1, TIMER_CH_2, &cp);  // blue
     init_channel(TIMER1, TIMER_CH_3, &cp);  // red
 
-    timer_update_source_config(TIMER2, TIMER_UPDATE_SRC_REGULAR);
+    // timer_update_source_config(TIMER2, TIMER_UPDATE_SRC_REGULAR);
     timer_primary_output_config(TIMER1, ENABLE);
     timer_auto_reload_shadow_enable(TIMER1);
+
+    // PWM for non timer pins need interrupt handlers
     timer_interrupt_enable(TIMER1, TIMER_INT_CH3);
     timer_interrupt_enable(TIMER1, TIMER_INT_UP);
+    eclic_irq_enable(TIMER1_IRQn, 1, 0);
+    eclic_global_interrupt_enable();
+
     timer_enable(TIMER1);
 }
 
@@ -132,8 +110,8 @@ void set_duty( enum Color color, uint32_t duty ) {
 
 
 void fade( enum Color from, enum Color to ) {
-    const uint32_t d = 10000000 / MAX_DUTY; // 1s per cycle
-    for( uint32_t i = 0; i <= MAX_DUTY; i++ ) {
+    const uint32_t d = 10000000 / MAX_DUTY;      // 10ms per duty
+    for( uint32_t i = 0; i <= MAX_DUTY; i++ ) {  // 10s per cycle
         set_duty(from, MAX_DUTY - i);
         set_duty(to, i);
         delay_1us(d);
@@ -142,10 +120,6 @@ void fade( enum Color from, enum Color to ) {
 
 
 int main() {
-    eclic_global_interrupt_enable();
-    eclic_set_nlbits(ECLIC_GROUP_LEVEL3_PRIO1);
-    eclic_irq_enable(TIMER1_IRQn, 1, 0);
-
     init_usart0();
     init_pwm();
 
