@@ -4,13 +4,16 @@
 
 
 enum Color {
-    Red = TIMER_CH_3,
+    Red   = TIMER_CH_3,
     Green = TIMER_CH_1,
-    Blue = TIMER_CH_2
+    Blue  = TIMER_CH_2
 };
 
+
 const uint16_t PRESCALE = 540;  // with APB1=54000000: 100kHz pwm ticks
-const uint16_t MAX_DUTY = 1000; // 100kHz ticks / MAX_DUTY: 100Hz pwm interval
+const uint16_t MAX_DUTY = 1000; // 100kHz ticks/MAX_DUTY: 100Hz pwm interval
+
+const uint32_t DUTY_US  = 5000; // 5ms same duty: duty*MAX_DUTY = 5s per fade
 
 
 void init_usart0() {
@@ -106,12 +109,11 @@ void set_pwm_duty( uint16_t channel, uint16_t duty ) {
 }
 
 
-void fade( enum Color from, enum Color to ) {
-    const uint32_t d = 5000000 / MAX_DUTY;      // 5ms same duty
+void fade( enum Color from, enum Color to, uint32_t duty_us ) {
     for( uint32_t i = 0; i <= MAX_DUTY; i++ ) { // 5s per cycle
         set_pwm_duty(from, MAX_DUTY - i);
         set_pwm_duty(to, i);
-        delay_1us(d);
+        delay_1us(duty_us);
     }
 }
 
@@ -121,9 +123,9 @@ int main() {
     init_pwm(PRESCALE, MAX_DUTY);
 
     while( 1 ) {
-        fade(Red, Blue);
-        fade(Blue, Green);
-        fade(Green, Red);
+        fade(Red,   Blue, DUTY_US);
+        fade(Blue, Green, DUTY_US);
+        fade(Green,  Red, DUTY_US);
     }
 }
 
