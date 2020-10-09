@@ -15,6 +15,19 @@ Gnd         | Gnd
 A9 (T0)     | Rx
 A10 (R0)    | Tx         | not needed if flashing via USB/DFU or JTAG
 
+or
+
+Nano        | Sipeed JTAG | Comment
+------------|-------------|--------
+3V3         | 3V3         | not needed if powered via USB or other
+Gnd         | Gnd         |
+A9 (T0)     | RXD         |
+A10 (R0)    | TXD         | not needed if flashing via USB/DFU or JTAG
+JTDO        | TDO         | \
+JTDI        | TDI         |  \ not needed if
+JTCK        | TCK         |  / debugging not used
+JTMS        | TMS         | /
+
 ## Documentation
 Tested with PlatformIO on a Longan Nano
 * 
