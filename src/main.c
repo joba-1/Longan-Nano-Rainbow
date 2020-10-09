@@ -6,9 +6,16 @@ Hardware driven approach is faster and uses no CPU cycles but only works on sele
 Interrupt driven approach can be used on any pin but is limited to at least 10 times lower frequencies.
 */
 
+#ifdef WITH_SERIAL
 #include <usart.h>
 #include <stdio.h>
+#endif
+
 #include <systick.h>
+
+#include <gd32vf103_timer.h>
+#include <gd32vf103_gpio.h>
+#include <gd32vf103_rcu.h>
 
 
 /*
@@ -123,6 +130,8 @@ No timer, led or other pwm configuration should be necessary below
 #endif
 
 
+#ifdef WITH_SERIAL
+
 /* 
 Init serial and reroute c standard output there.
 Convenience stuff, not related to pwm at all.
@@ -138,6 +147,12 @@ void init_usart0() {
 int _put_char( int ch ) {
     return usart_put_char(USART0, ch);
 }
+
+#define DEBUG_OUT(...) printf(__VA_ARGS__)
+
+#else
+#define DEBUG_OUT(...)
+#endif
 
 
 /* 
@@ -234,18 +249,18 @@ void init_pwm( uint16_t prescale, uint16_t ticks ) {
         if( _cfg_pins[p].mode == Interrupt ) {
             struct irq_channels *pc = find_or_add_channel(&_cfg_timers[_cfg_pins[p].timer].channels, &c_pool, _cfg_pins[p].channel);
             if( !pc ) {
-                printf("ERROR: increase channel pool or some irq pins wont work!\n\r");
+                DEBUG_OUT("ERROR: increase channel pool or some irq pins wont work!\n\r");
                 break; // Error! Provide more space in _irq_channels
             }
             if( c_pool && c_pool >= &_irq_channels[ARRAY_SIZE(_irq_channels)] ) c_pool = 0; // last slot in _irq_channels used up
             if( !find_or_add_pin(&pc->pins, &p_pool, p) ) {
-                printf("ERROR: increase pin pool or some irq pins wont work!\n\r");
+                DEBUG_OUT("ERROR: increase pin pool or some irq pins wont work!\n\r");
                 break; // Error! Provide more space in _irq_pins
             }
             if( p_pool && p_pool >= &_irq_pins[ARRAY_SIZE(_irq_pins)] ) p_pool = 0; // last slot in _irq_pins used up
         }
     }
-    printf("irq lists done\n\r");
+    DEBUG_OUT("irq lists done\n\r");
 
     // Init used gpio pins
     for( int p = 0; p < ARRAY_SIZE(_cfg_pins); p++ ) {
@@ -253,7 +268,7 @@ void init_pwm( uint16_t prescale, uint16_t ticks ) {
         gpio_bit_set(_cfg_gpio_banks[_cfg_pins[p].bank].port, _cfg_pins[p].pin); // switch off inverted led
     }
 
-    printf("gpio done\n\r");
+    DEBUG_OUT("gpio done\n\r");
 
     for( int t = 0; t < ARRAY_SIZE(_cfg_timers); t++ ) {
         rcu_periph_clock_enable(_cfg_timers[t].rcu); // clock for used timers
@@ -269,7 +284,7 @@ void init_pwm( uint16_t prescale, uint16_t ticks ) {
         timer_init(_cfg_timers[t].port, &tp);
     }
 
-    printf("timer init done. %lu ns = %lu kHz ticks and %lu us = %lu Hz intervals if CK_TIMER = CK_ABP1 = %lu MHz\n\r",
+    DEBUG_OUT("timer init done. %lu ns = %lu kHz ticks and %lu us = %lu Hz intervals if CK_TIMER = CK_ABP1 = %lu MHz\n\r",
         500000000UL / (rcu_clock_freq_get(CK_APB1) / prescale), 2UL * rcu_clock_freq_get(CK_APB1) / (prescale * 1000UL),
         500000UL / (rcu_clock_freq_get(CK_APB1) / (prescale * ticks)), 2UL * rcu_clock_freq_get(CK_APB1) / (prescale * ticks),
         rcu_clock_freq_get(CK_APB1)/1000000UL);
@@ -292,13 +307,13 @@ void init_pwm( uint16_t prescale, uint16_t ticks ) {
         }
     }
 
-    printf("channel init done\n\r");
+    DEBUG_OUT("channel init done\n\r");
 
     if( use_mode_interrupt ) {
         eclic_global_interrupt_enable(); // make the interrupt controller do its work
     }
 
-    printf("eclic enabled\n\r");
+    DEBUG_OUT("eclic enabled\n\r");
 
     for( int t = 0; t < ARRAY_SIZE(_cfg_timers); t++ ) {
         timer_primary_output_config(_cfg_timers[t].port, ENABLE);
@@ -306,7 +321,7 @@ void init_pwm( uint16_t prescale, uint16_t ticks ) {
         timer_enable(_cfg_timers[t].port);
     }
 
-    printf("timers enabled\n\r");
+    DEBUG_OUT("timers enabled\n\r");
 }
 
 
@@ -400,17 +415,19 @@ void fade( enum Color from, enum Color to, uint32_t duty_us ) {
 // * Start fading between colors to cycle through the rainbow
 int main() {
     preinit_pwm(); // reset interrupt and gpio state paranoia
+    #ifdef WITH_SERIAL
     init_usart0();
+    #endif
     init_pwm(PRESCALE, MAX_DUTY);
-    printf("init done\n\r");
+    DEBUG_OUT("init done\n\r");
 
     while( 1 ) {
-        printf("fade r->b\n\r");
+        DEBUG_OUT("fade r->b\n\r");
         fade(Red, Blue, DUTY_US);
-        printf("fade b->g\n\r");
+        DEBUG_OUT("fade b->g\n\r");
         fade(Blue, Green, DUTY_US);
-        printf("fade g->r\n\r");
+        DEBUG_OUT("fade g->r\n\r");
         fade(Green, Red, DUTY_US);
-        printf("handler/update/channel/overflow: %lu/%lu/%lu/%lu\n\r", _h, _u, _c, _g);
+        DEBUG_OUT("handler/update/channel/overflow: %lu/%lu/%lu/%lu\n\r", _h, _u, _c, _g);
     }
 }
